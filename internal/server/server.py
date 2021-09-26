@@ -2,21 +2,30 @@ import json
 import socket
 import logging
 import time
+from copy import copy
 from email.parser import Parser
 
 from internal.server.request import Request
 from internal.server.response import Response
 
-MAX_LINE = 64*1024
+MAX_LINE = 64 * 1024
 MAX_HEADERS = 100
+EXTRACTION = {'html': 'text/html; charset=UTF-8',
+              'css': 'text/css',
+              'js': 'text/javascript; charset=utf-8',
+              'jpg': 'image/jpeg',
+              'jpeg': 'image/jpeg',
+              'png': 'image/png',
+              'gif': 'image/gif',
+              'swg': 'application/x-shockwave-flash'}
 
 
 class HTTPServer:
-    def __init__(self, host, port, server_name):
-        self._users = {}
+    def __init__(self, host, port, server_name, document_root):
         self._host = host
         self._port = port
         self._server_name = server_name
+        self._document_root = document_root
 
     def serve_forever(self):
         serv_sock = socket.socket(
@@ -46,6 +55,7 @@ class HTTPServer:
         except ConnectionResetError:
             conn = None
         except Exception as e:
+            logging.error(e)
             self.send_error(conn, e)
 
         if conn:
@@ -103,86 +113,67 @@ class HTTPServer:
 
     def handle_request(self, req):
         logging.debug('Handle request')
-        logging.debug('Start sleep')
-        time.sleep(15)
-        logging.debug('Stop sleep')
-        if req.path == '/users' and req.method == 'POST':
-            return self.handle_post_users(req)
-
-        if req.path == '/users' and req.method == 'GET':
-            return self.handle_get_users(req)
-
-        if req.path.startswith('/users/'):
-            user_id = req.path[len('/users/'):]
-            if user_id.isdigit():
-                return self.handle_get_user(req, user_id)
-
-        raise Exception('Not found')
-
-    def handle_post_users(self, req):
-        user_id = len(self._users) + 1
-        self._users[user_id] = {'id': user_id,
-                                'name': req.query['name'][0],
-                                'age': req.query['age'][0]}
-        logging.debug(fr'Post user: ${self._users[user_id]}')
-        return Response(204, 'Created')
-
-    def handle_get_users(self, req):
-        accept = req.headers.get('Accept')
-        if 'text/html' in accept:
-            contentType = 'text/html; charset=utf-8'
-            body = '<html><head></head><body>'
-            body += f'<div>Пользователи ({len(self._users)})</div>'
-            body += '<ul>'
-            for u in self._users.values():
-                body += f'<li>#{u["id"]} {u["name"]}, {u["age"]}</li>'
-            body += '</ul>'
-            body += '</body></html>'
-
-        elif 'application/json' in accept:
-            contentType = 'application/json; charset=utf-8'
-            body = json.dumps(self._users)
-
+        # logging.debug('Start sleep')
+        # time.sleep(15)
+        # logging.debug('Stop sleep')
+        if req.method == 'GET':
+            return self.routing_get(req)
+        elif req.method == 'HEAD':
+            return self.routing_head(req)
         else:
-            # https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/406
-            return Response(406, 'Not Acceptable')
+            return Response(405, '')
 
-        body = body.encode('utf-8')
-        headers = [('Content-Type', contentType),
-                   ('Content-Length', len(body))]
-        return Response(200, 'OK', headers, body)
+    def routing_get(self, req):
+        path = copy(req.path)
+        logging.debug('GET ' + path)
+        if len(path.split('.')) == 1:
+            logging.debug('got the directory')
+            path += '/index.html'
 
-    def handle_get_user(self, req, user_id):
-        pass
+        try:
+            headers = [('Content-Type', EXTRACTION[path.split('.')[-1]])]
+            with open(self._document_root + path, 'rb') as file:
+                info = file.read()
+                return Response(status=200, body=info, headers=headers)
+        except FileNotFoundError:
+            return Response(status=404, body='')
+
+    def routing_head(self, req):
+        return Response(405, '')
 
     def send_response(self, conn, resp):
+        logging.debug('Send response')
         wfile = conn.makefile('wb')
-        status_line = f'HTTP/1.1 {resp.status} {resp.reason}\r\n'
+        status_line = f'HTTP/1.1 {resp.status}\r\n'
         wfile.write(status_line.encode('iso-8859-1'))
 
+        logging.debug('Send response 1')
         if resp.headers:
             for (key, value) in resp.headers:
                 header_line = f'{key}: {value}\r\n'
                 wfile.write(header_line.encode('iso-8859-1'))
 
+        logging.debug('Send response 2')
         wfile.write(b'\r\n')
 
+        logging.debug('Send response 3')
         if resp.body:
             wfile.write(resp.body)
 
+        logging.debug('Send response 4')
         wfile.flush()
         wfile.close()
+        logging.debug('Send response 5')
 
     def send_error(self, conn, err):
+        logging.debug('Send error')
         try:
             status = err.status
-            reason = err.reason
             body = (err.body or err.reason).encode('utf-8')
         except:
             status = 500
-            reason = b'Internal Server Error'
             body = b'Internal Server Error'
-        resp = Response(status, reason,
+        resp = Response(status,
                         [('Content-Length', len(body))],
                         body)
         self.send_response(conn, resp)
