@@ -19,13 +19,17 @@ EXTRACTION = {'html': 'text/html; charset=UTF-8',
               'gif': 'image/gif',
               'swg': 'application/x-shockwave-flash'}
 
+DEFAULT_HOST = '127.0.0.1'
+DEFAULT_PORT = 80
+DEFAULT_SERVER_NAME = 'localhost'
+DEFAULT_DOCUMENT_ROOT = '/var/www/html'
+
 
 class HTTPServer:
-    def __init__(self, host, port, server_name, document_root):
-        self._host = host
-        self._port = port
-        self._server_name = server_name
-        self._document_root = document_root
+    def __init__(self, config):
+        self._port = int(config['port']) if 'port' in config else DEFAULT_PORT
+        self._server_name = config['server_name'] if 'server_name' in config else DEFAULT_SERVER_NAME
+        self._document_root = config['document_root'] if 'document_root' in config else DEFAULT_DOCUMENT_ROOT
 
     def serve_forever(self):
         serv_sock = socket.socket(
@@ -34,8 +38,9 @@ class HTTPServer:
             proto=0)
 
         try:
-            serv_sock.bind((self._host, self._port))
+            serv_sock.bind(('', self._port))
             serv_sock.listen()
+            logging.info('Server start on port: ' + str(self._port))
 
             while True:
                 conn, _ = serv_sock.accept()
