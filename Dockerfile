@@ -1,8 +1,11 @@
 FROM python:3.8
 
 #COPY httptest /var/www/html
-COPY . .
-COPY ./data /var/www/html
+COPY . /app
+COPY . /var/www
+
+WORKDIR /app
+RUN pip install http-parser
 
 EXPOSE 80
 

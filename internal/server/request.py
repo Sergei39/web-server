@@ -1,31 +1,14 @@
-from functools import lru_cache
-from urllib.parse import parse_qs, urlparse
+import logging
 
 
 class Request:
-  def __init__(self, method, target, version, headers, rfile):
-    self.method = method
-    self.target = target
-    self.version = version
-    self.headers = headers
-    self.rfile = rfile
+    def __init__(self, method, path, headers, isDir):
+        self.method = method
+        self.path = path
+        self.headers = headers
+        self.isDir = isDir
 
-  def body(self):
-    size = self.headers.get('Content-Length')
-    if not size:
-      return None
-    return self.rfile.read(size)
-
-  @property
-  def path(self):
-    return self.url.path
-
-  @property
-  @lru_cache(maxsize=None)
-  def query(self):
-    return parse_qs(self.url.query)
-
-  @property
-  @lru_cache(maxsize=None)
-  def url(self):
-    return urlparse(self.target)
+        logging.debug('isDir: ' + str(isDir))
+        if len(path.split('/')[-1].split('.')) == 1:
+            logging.debug('got the directory')
+            self.path += '/index.html' if self.path[-1] != '/' else 'index.html'
