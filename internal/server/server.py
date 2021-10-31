@@ -29,6 +29,7 @@ EXTRACTION = {'html': 'text/html',
 DEFAULT_PORT = 80
 DEFAULT_SERVER_NAME = 'localhost'
 DEFAULT_DOCUMENT_ROOT = '/var/www/html'
+DEFAULT_THREAD_LIMIT = 16
 
 
 class HTTPServer:
@@ -36,6 +37,8 @@ class HTTPServer:
         self._port = int(config['port']) if 'port' in config else DEFAULT_PORT
         self._server_name = config['server_name'] if 'server_name' in config else DEFAULT_SERVER_NAME
         self._document_root = config['document_root'] if 'document_root' in config else DEFAULT_DOCUMENT_ROOT
+        self._thread_limit = int(config['thread_limit']) if 'thread_limit' in config else DEFAULT_THREAD_LIMIT
+        self._fork_pool = []
 
     def serve_forever(self):
         serv_sock = socket.socket(
@@ -47,19 +50,35 @@ class HTTPServer:
             serv_sock.bind(('', self._port))
             serv_sock.listen()
             logging.info('Server start on port: ' + str(self._port))
+            self.run_fork_pool(serv_sock)
 
-            while True:
-                conn, _ = serv_sock.accept()
-                try:
-                    self.serve_client(conn)
-                except Exception as e:
-                    print(('Client serving failed', e))
         finally:
+            logging.info("Wait fork")
+            for fork in self._fork_pool:
+                os.waitpid(fork, 0)
+            logging.info("Server stop")
             serv_sock.close()
+
+    def run_fork_pool(self, serv_sock):
+        for i in range(self._thread_limit):
+            pid = os.fork()
+            if pid != 0:
+                logging.info("start pid: " + str(pid))
+                self._fork_pool.append(pid)
+
+            else:
+                while True:
+                    conn, _ = serv_sock.accept()
+                    try:
+                        self.serve_client(conn)
+                    except Exception as e:
+                        print(('Client serving failed', e))
+
+                    conn.close()
 
     def serve_client(self, conn):
         try:
-            logging.debug('New connect')
+            logging.debug('New connect on pid: ' + str(os.getpid()))
             req = self.parse_request(conn)
             resp = self.handle_request(req)
             self.send_response(conn, resp)
@@ -93,15 +112,12 @@ class HTTPServer:
         method = parser.get_method()
         path = parser.get_path()
         path = unquote(path)
-        parser_headers = parser.get_headers()
+        headers = parser.get_headers()
 
-        return Request(method, path, parser_headers, os.path.isdir(self._document_root + path))
+        return Request(method, path, headers, os.path.isdir(self._document_root + path))
 
     def handle_request(self, req):
         logging.debug('Handle request')
-        # logging.debug('Start sleep')
-        # time.sleep(15)
-        # logging.debug('Stop sleep')
         if req.method != 'GET' and req.method != 'HEAD':
             logging.info('Incorrect method: ' + req.method)
             return Response(status=st.NOT_ALLOWED, body='')
