@@ -5,7 +5,7 @@ from internal.server.server import HTTPServer
 from internal.utils import read_config
 
 if __name__ == '__main__':
-    logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(level=logging.INFO)
 
     serv = HTTPServer(read_config(sys.argv[1]))
     try:

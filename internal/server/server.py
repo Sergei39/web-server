@@ -1,17 +1,12 @@
 import socket
 import logging
 from copy import copy
-from urllib.parse import unquote
 import os
 
 from internal.server.request import Request
 from internal.server.response import Response, init_get_response, init_head_response
 import internal.server.response as st
-
-try:
-    from http_parser.parser import HttpParser
-except ImportError:
-    from http_parser.pyparser import HttpParser
+from internal.parser import HttpParser
 
 RECV_TIMEOUT = 20
 BUF_SIZE = 4096
@@ -53,10 +48,6 @@ class HTTPServer:
             self.run_fork_pool(serv_sock)
 
         finally:
-            logging.info("Wait fork")
-            for fork in self._fork_pool:
-                os.waitpid(fork, 0)
-            logging.info("Server stop")
             serv_sock.close()
 
     def run_fork_pool(self, serv_sock):
@@ -76,6 +67,11 @@ class HTTPServer:
 
                     conn.close()
 
+        logging.info("Wait fork")
+        for fork in self._fork_pool:
+            os.waitpid(fork, 0)
+        logging.info("Server stop")
+
     def serve_client(self, conn):
         try:
             logging.debug('New connect on pid: ' + str(os.getpid()))
@@ -93,25 +89,12 @@ class HTTPServer:
 
     def parse_request(self, conn):
         logging.debug('Parse request')
-        data = b""
         parser = HttpParser()
         conn.settimeout(RECV_TIMEOUT)
-        while not parser.is_headers_complete():
-            try:
-                chunk = conn.recv(BUF_SIZE)
-            except:
-                break
-            if not chunk:
-                break
-
-            parser.execute(chunk, len(chunk))
-            data += chunk
-            if data.decode().endswith('\n'):
-                break
+        parser.parse_request(conn)
 
         method = parser.get_method()
         path = parser.get_path()
-        path = unquote(path)
         headers = parser.get_headers()
 
         return Request(method, path, headers, os.path.isdir(self._document_root + path))
