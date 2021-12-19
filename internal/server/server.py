@@ -4,22 +4,12 @@ from copy import copy
 import os
 
 from internal.server.request import Request
-from internal.server.response import Response, init_get_response, init_head_response
+from internal.server.response import Response
 import internal.server.response as st
 from internal.parser import HttpParser
 
 RECV_TIMEOUT = 20
 BUF_SIZE = 4096
-EXTRACTION = {'html': 'text/html',
-              'txt': 'text/html',
-              'css': 'text/css',
-              'js': 'text/javascript',
-              'jpg': 'image/jpeg',
-              'jpeg': 'image/jpeg',
-              'png': 'image/png',
-              'gif': 'image/gif',
-              'swg': 'application/x-shockwave-flash',
-              'swf': 'application/x-shockwave-flash'}
 
 DEFAULT_PORT = 80
 DEFAULT_SERVER_NAME = 'localhost'
@@ -60,12 +50,15 @@ class HTTPServer:
             else:
                 while True:
                     conn, _ = serv_sock.accept()
+                    # conn.setblocking(True)
                     try:
                         self.serve_client(conn)
                     except Exception as e:
                         print(('Client serving failed', e))
-
-                    conn.close()
+                    finally:
+                        logging.info("close connection")
+                        # conn.shutdown(1)
+                        conn.close()
 
         logging.info("Wait fork")
         for fork in self._fork_pool:
@@ -73,11 +66,11 @@ class HTTPServer:
         logging.info("Server stop")
 
     def serve_client(self, conn):
+        # todo убрать try
         try:
             logging.debug('New connect on pid: ' + str(os.getpid()))
             req = self.parse_request(conn)
-            resp = self.handle_request(req)
-            self.send_response(conn, resp)
+            self.handle_request(conn, req)
         except ConnectionResetError:
             conn = None
         except Exception as e:
@@ -99,47 +92,21 @@ class HTTPServer:
 
         return Request(method, path, headers, os.path.isdir(self._document_root + path))
 
-    def handle_request(self, req):
+    def handle_request(self, conn, req):
         logging.debug('Handle request')
         if req.method != 'GET' and req.method != 'HEAD':
             logging.info('Incorrect method: ' + req.method)
-            return Response(status=st.NOT_ALLOWED, body='')
+            Response(status=st.NOT_ALLOWED).send(conn, req.method)
 
-        return self.routing(req)
+        self.routing(conn, req)
 
-    def routing(self, req):
+    def routing(self, conn, req):
         path = copy(req.path)
         logging.debug('method: ' + req.method + ', path: ' + path)
 
-        try:
-            headers = [('Content-Type', EXTRACTION[path.split('.')[-1]])]
-            with open(self._document_root + path, 'rb') as file:
-                info = file.read()
-                return init_get_response(status=st.OK, body=info, headers=headers) \
-                    if req.method == 'GET' \
-                    else init_head_response(status=st.OK, body=info, headers=headers)
-        except (FileNotFoundError, NotADirectoryError):
-            status = st.FORBIDDEN if req.isDir else st.NOT_FOUND
-            return Response(status=status, body='')
+        # with open(self._document_root + path, 'rb') as file:
 
-    def send_response(self, conn, resp):
-        logging.debug('Send response')
-        wfile = conn.makefile('wb')
-        status_line = f'HTTP/1.1 {resp.code_status} {resp.text_status}\r\n'
-        wfile.write(status_line.encode('utf-8'))
-
-        if resp.headers:
-            for (key, value) in resp.headers:
-                header_line = f'{key}: {value}\r\n'
-                wfile.write(header_line.encode('utf-8'))
-
-        wfile.write(b'\r\n')
-
-        if resp.body:
-            wfile.write(resp.body)
-
-        wfile.flush()
-        wfile.close()
+        Response(path=self._document_root + path).send(conn, req.method)
 
     def send_error(self, conn, err):
         logging.debug('Send error')
@@ -149,7 +116,4 @@ class HTTPServer:
         except:
             status = st.SERVER_ERROR
             body = b'Internal Server Error'
-        resp = Response(status,
-                        [('Content-Length', len(body))],
-                        body)
-        self.send_response(conn, resp)
+        Response(headers=[('Content-Length', len(body))], status=status).send(conn, '')

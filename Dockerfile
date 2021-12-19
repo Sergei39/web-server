@@ -5,7 +5,6 @@ COPY . /app
 COPY . /var/www
 
 WORKDIR /app
-RUN pip install http-parser
 
 EXPOSE 80
 

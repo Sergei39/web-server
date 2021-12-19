@@ -1,7 +1,6 @@
 from urllib.parse import unquote
 
-MAX_LINE = 64 * 10
-MAX_HEADERS = 100
+MAX_LINE = 10 * 64
 
 
 class HttpParser:
@@ -28,8 +27,6 @@ class HttpParser:
                 break
 
             headers.append(line)
-            if len(headers) > MAX_HEADERS:
-                raise Exception('Too many headers')
 
         self.headers = headers
 
