@@ -37,11 +37,11 @@ document_root /var/www/html
 
 Run tests:
 ```
-git clone https://github.com/init/http-test-suite.git
-cd http-test-suite
+git clone https://github.com/Sergei39/web-server.git
+cd web-server
 
-docker build -t bykov-httpd https://github.com/init/httpd.git
-docker run -p 80:80 -v /etc/httpd.conf:/etc/httpd.conf:ro -v /var/www/html:/var/www/html:ro --name bykov-httpd -t bykov-httpd
+docker build -t web-server .
+docker run -p 80:80 --name web-server -t web-server
 
 ./httptest.py
 ```
@@ -57,7 +57,7 @@ OK
 ### Load test result:  
 
 - ab -n 10000 -c 10 127.0.0.1:80/httptest/wikipedia_russia.html
-```asm
+```
 This is ApacheBench, Version 2.3 <$Revision: 1879490 $>
 Copyright 1996 Adam Twiss, Zeus Technology Ltd, http://www.zeustech.net/
 Licensed to The Apache Software Foundation, http://www.apache.org/
@@ -78,39 +78,39 @@ Finished 10000 requests
 
 Server Software:        web-server
 Server Hostname:        127.0.0.1
-Server Port:            82
+Server Port:            80
 
-Document Path:          /wikipedia_russia.html
+Document Path:          /httptest/wikipedia_russia.html
 Document Length:        954824 bytes
 
 Concurrency Level:      10
-Time taken for tests:   6.231 seconds
+Time taken for tests:   2.715 seconds
 Complete requests:      10000
 Failed requests:        0
 Total transferred:      9549680000 bytes
 HTML transferred:       9548240000 bytes
-Requests per second:    1604.94 [#/sec] (mean)
-Time per request:       6.231 [ms] (mean)
-Time per request:       0.623 [ms] (mean, across all concurrent requests)
-Transfer rate:          1496747.00 [Kbytes/sec] received
+Requests per second:    3683.67 [#/sec] (mean)
+Time per request:       2.715 [ms] (mean)
+Time per request:       0.271 [ms] (mean, across all concurrent requests)
+Transfer rate:          3435335.04 [Kbytes/sec] received
 
 Connection Times (ms)
               min  mean[+/-sd] median   max
-Connect:        0    0   0.0      0       1
-Processing:     4    6   1.6      6      29
-Waiting:        4    6   1.5      5      29
-Total:          5    6   1.6      6      30
+Connect:        0    0   1.1      0     106
+Processing:     2    2   4.6      2     108
+Waiting:        1    2   3.5      1     107
+Total:          2    3   4.7      2     108
 
 Percentage of the requests served within a certain time (ms)
-  50%      6
-  66%      6
-  75%      6
-  80%      6
-  90%      7
-  95%      7
-  98%     10
-  99%     14
- 100%     30 (longest request)
+  50%      2
+  66%      2
+  75%      2
+  80%      3
+  90%      3
+  95%      3
+  98%      4
+  99%      6
+ 100%    108 (longest request)
 ```
 
 ### Nginx:  
